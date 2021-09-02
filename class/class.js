@@ -32,6 +32,33 @@
 // console.log(b.name);
 // b.say()
 
+// Object.getPrototypeOf方法可以用来从子类上获取父类。
+// Object.getPrototypeOf(Super) === Star
+
+// 取值函数（getter）和存值函数（setter）
+// 与 ES5 一样，在“类”的内部可以使用get和set关键字，对某个属性设置存值函数和取值函数，拦截该属性的存取行为。
+
+// class MyClass {
+//   constructor() {
+//     // ...
+//   }
+//   get prop() {
+//     return 'getter';
+//   }
+//   set prop(value) {
+//     console.log('setter: '+value);
+//   }
+// }
+
+// let inst = new MyClass();
+
+// inst.prop = 123;
+// setter: 123
+
+// inst.prop
+// 'getter'
+
+
 // super 关键字
 class Father {
     constructor(x, y) {
@@ -183,6 +210,7 @@ class Father {
   // 但是也不是绝对不行，Reflect.ownKeys()依然可以拿到它们。
   const inst = new myClass();
 
+  // 静态方法 Reflect.ownKeys() 返回一个由目标对象自身的属性键组成的数组。
   Reflect.ownKeys(myClass.prototype)
   // [ 'constructor', 'foo', Symbol(bar) ]
 
@@ -205,3 +233,92 @@ class Father {
   const counter = new IncreasingCounter();
   counter.#count // 报错
   counter.#count = 42 // 报错
+
+
+  // Mixin 模式的实现
+  // Mixin 指的是多个对象合成一个新的对象，新对象具有各个组成成员的接口。它的最简单实现如下。
+  const a = {
+    a: 'a'
+  };
+  const b = {
+    b: 'b'
+  };
+  const c = {...a, ...b}; // {a: 'a', b: 'b'}
+
+  // 下面是一个更完备的实现，将多个类的接口“混入”（mix in）另一个类
+
+  function mix(...mixins) {
+    class Mix {
+      constructor() {
+        for (let mixin of mixins) {
+          copyProperties(this, new mixin()); // 拷贝实例属性
+        }
+      }
+    }
+  
+    for (let mixin of mixins) {
+      copyProperties(Mix, mixin); // 拷贝静态属性
+      copyProperties(Mix.prototype, mixin.prototype); // 拷贝原型属性
+    }
+  
+    return Mix;
+  }
+  
+  function copyProperties(target, source) {
+    for (let key of Reflect.ownKeys(source)) {
+      if ( key !== 'constructor'
+        && key !== 'prototype'
+        && key !== 'name'
+      ) {
+        let desc = Object.getOwnPropertyDescriptor(source, key);
+        Object.defineProperty(target, key, desc);
+      }
+    }
+  }
+  
+  // 上面代码的mix函数，可以将多个对象合成为一个类。使用的时候，只要继承这个类即可。
+  class DistributedEdit extends mix(Loggable, Serializable) {
+    // ...
+  }
+  
+
+  // 类的 prototype 属性和__proto__属性
+
+  // 大多数浏览器的 ES5 实现之中，每一个对象都有__proto__属性，指向对应的构造函数的prototype属性。
+  // Class 作为构造函数的语法糖，同时有prototype属性和__proto__属性，因此同时存在两条继承链。
+
+  // （1）子类的__proto__属性，表示构造函数的继承，总是指向父类。
+  // （2）子类prototype属性的__proto__属性，表示方法的继承，总是指向父类的prototype属性class A {
+  class A {
+  }
+  
+  class B extends A {
+  }
+  
+  B.__proto__ === A // true
+  B.prototype.__proto__ === A.prototype // true
+    
+  // 这样的结果是因为，类的继承是按照下面的模式实现的。
+  class A {
+  }
+  
+  class B {
+  }
+  // Object.setPrototypeOf() 方法设置一个指定的对象的原型 ( 即, 内部[[Prototype]]属性）到另一个对象或  null。
+  // B 的实例继承 A 的实例
+  Object.setPrototypeOf(B.prototype, A.prototype);
+  
+  // B 继承 A 的静态属性
+  Object.setPrototypeOf(B, A);
+  
+  const b = new B();
+
+
+  // 不存在任何继承
+  class A {
+  }
+  
+  A.__proto__ === Function.prototype // true
+  A.prototype.__proto__ === Object.prototype // true
+  // 这种情况下，A作为一个基类（即不存在任何继承），就是一个普通函数，所以直接继承Function.prototype。
+  // 但是，A调用后返回一个空对象（即Object实例），所以A.prototype.__proto__指向构造函数（Object）的prototype属性。
